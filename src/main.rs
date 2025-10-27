@@ -1,6 +1,6 @@
 use std::{fs, io::ErrorKind, path::Path};
 
-use cacherch::log::LogStyle;
+use cacherch::{helpers::extract_pdf_text, log::LogStyle};
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use tantivy::{Index, IndexWriter, doc, schema::*};
@@ -57,8 +57,13 @@ fn index_dir(path: &str) -> std::io::Result<()> {
     let schema = schema_builder.build();
 
     std::fs::create_dir_all(INDEX_DIR)?;
-    let index = Index::create_in_dir(INDEX_DIR, schema)
-        .map_err(|e| std::io::Error::new(ErrorKind::Other, e.to_string()))?;
+    let index = if Path::new(INDEX_DIR).exists() {
+        Index::open_in_dir(INDEX_DIR)
+            .map_err(|e| std::io::Error::new(ErrorKind::Other, e.to_string()))?
+    } else {
+        Index::create_in_dir(INDEX_DIR, schema)
+            .map_err(|e| std::io::Error::new(ErrorKind::Other, e.to_string()))?
+    };
 
     let mut index_writer: IndexWriter = index
         .writer(50_000_000)
@@ -80,32 +85,62 @@ fn index_dir(path: &str) -> std::io::Result<()> {
             } else if entry_path.is_file()
                 && entry_path.extension().and_then(|e| e.to_str()) == Some("txt")
             {
-                let content = fs::read_to_string(&entry_path)?;
-                let title_str = entry_path
-                    .file_name()
-                    .map(|f| f.to_string_lossy().to_string())
-                    .unwrap_or_else(|| {
-                        println!(
-                            "{}",
-                            LogStyle::warning(&format!(
-                                "Skipping file with invalid name: {}",
-                                entry_path.display()
-                            ))
+                let ext = entry_path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|s| s.to_lowercase())
+                    .unwrap_or_default();
+
+                let content_res: Result<String, std::io::Error> = match ext.as_str() {
+                    "txt" => fs::read_to_string(&entry_path),
+                    "pdf" => entry_path
+                        .to_str()
+                        .ok_or_else(|| std::io::Error::new(ErrorKind::Other, "Invalid PDF path"))
+                        .and_then(|s| {
+                            extract_pdf_text(s).or_else(|_| {
+                                Err(std::io::Error::new(
+                                    ErrorKind::Other,
+                                    format!("Failed to extract PDF: {}", s),
+                                ))
+                            })
+                        }),
+                    _ => Err(std::io::Error::new(
+                        ErrorKind::Other,
+                        format!("File extension not supported: {}", ext),
+                    )),
+                };
+
+                match content_res {
+                    Ok(content) => {
+                        let title_str = entry_path
+                            .file_name()
+                            .and_then(|f| f.to_str())
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| {
+                                println!(
+                                    "{}",
+                                    LogStyle::warning(&format!(
+                                        "Skipping file with invalid name: {}",
+                                        entry_path.display()
+                                    ))
+                                );
+                                "".to_string()
+                            });
+
+                        let path_str = entry_path.display().to_string();
+
+                        let doc = doc!(
+                            title => title_str,
+                            body => content,
+                            path_field => path_str
                         );
 
-                        "".to_string()
-                    });
-                let path_str = entry_path.display().to_string();
-
-                let doc = doc!(
-                    title => title_str,
-                    body => content,
-                    path_field => path_str
-                );
-
-                index_writer
-                    .add_document(doc)
-                    .map_err(|e| std::io::Error::new(ErrorKind::Other, e.to_string()))?;
+                        index_writer
+                            .add_document(doc)
+                            .map_err(|e| std::io::Error::new(ErrorKind::Other, e.to_string()))?;
+                    }
+                    Err(e) => println!("{}", LogStyle::error(&format!("{}", e))),
+                }
             }
         }
         Ok(())

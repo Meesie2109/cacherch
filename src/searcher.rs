@@ -10,8 +10,16 @@ use crate::types::SearchResult;
 
 const INDEX_DIR: &str = "./index";
 
-pub async fn search_query(query_str: &str, ttl: &usize) -> Result<(), CacherchError> {
+pub async fn search_query(
+    query_str: &str,
+    ttl: &usize,
+    flush_cache: &bool,
+) -> Result<(), CacherchError> {
     let mut conn = cache::get_connection().await?;
+
+    if *flush_cache {
+        let _: () = cache::remove_cache(&mut conn).await?;
+    }
 
     let cache_key = format!("query:{}", query_str);
     if let Some(results) = cache::get_cached_results(&mut conn, &cache_key).await? {

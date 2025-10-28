@@ -9,8 +9,12 @@ async fn main() -> Result<(), CacherchError> {
     let cli = Cli::parse();
 
     match cli.cmd() {
-        Commands::Index { path } => index_dir(&path)?,
-        Commands::Search { query, ttl } => search_query(&query, &ttl).await?,
+        Commands::Index { path, flush_cache } => index_dir(&path, flush_cache).await?,
+        Commands::Search {
+            query,
+            ttl,
+            flush_cache,
+        } => search_query(&query, &ttl, &flush_cache).await?,
     }
 
     Ok(())

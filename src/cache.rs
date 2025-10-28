@@ -1,4 +1,4 @@
-use crate::{errors::CacherchError, types::SearchResult};
+use crate::{errors::CacherchError, log::LogStyle, types::SearchResult};
 use redis::AsyncCommands;
 use serde_json;
 
@@ -29,5 +29,13 @@ pub async fn set_cached_results(
 ) -> Result<(), CacherchError> {
     let json = serde_json::to_string(results)?;
     let _: () = conn.set_ex(key, json, ttl as u64).await?;
+    Ok(())
+}
+
+pub async fn remove_cache(
+    conn: &mut redis::aio::MultiplexedConnection,
+) -> Result<(), CacherchError> {
+    let _: () = redis::cmd("FLUSHDB").query_async(conn).await?;
+    println!("{}", LogStyle::info("Cache flushed before indexing."));
     Ok(())
 }

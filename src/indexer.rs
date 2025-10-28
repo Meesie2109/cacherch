@@ -5,11 +5,16 @@ use tantivy::{
     schema::{Field, STORED, Schema, TEXT},
 };
 
-use crate::{errors::CacherchError, helpers::extract_pdf_text, log::LogStyle};
+use crate::{cache, errors::CacherchError, helpers::extract_pdf_text, log::LogStyle};
 
 const INDEX_DIR: &str = "./index";
 
-pub fn index_dir(path: &str) -> Result<(), CacherchError> {
+pub async fn index_dir(path: &str, flush_cache: &bool) -> Result<(), CacherchError> {
+    if *flush_cache {
+        let mut conn = cache::get_connection().await?;
+        let _: () = cache::remove_cache(&mut conn).await?;
+    }
+
     println!(
         "{}",
         LogStyle::info(&format!("Indexing directory: {}", path))
@@ -21,10 +26,10 @@ pub fn index_dir(path: &str) -> Result<(), CacherchError> {
     let path_field = schema_builder.add_text_field("path", STORED);
     let schema = schema_builder.build();
 
-    std::fs::create_dir_all(INDEX_DIR)?;
     let index = if Path::new(INDEX_DIR).exists() {
         Index::open_in_dir(INDEX_DIR)?
     } else {
+        std::fs::create_dir_all(INDEX_DIR)?;
         Index::create_in_dir(INDEX_DIR, schema)?
     };
 

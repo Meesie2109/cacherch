@@ -21,10 +21,14 @@ impl Cli {
 pub enum Commands {
     Index {
         path: String,
+        #[arg(long, default_value_t = false)]
+        flush_cache: bool,
     },
     Search {
         query: String,
         #[arg(long, default_value_t = 30)]
         ttl: usize,
+        #[arg(long, default_value_t = false)]
+        flush_cache: bool,
     },
 }

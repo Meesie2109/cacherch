@@ -9,6 +9,7 @@ A small school project featuring a CLI-based search engine. It allows you to add
 - Redis caching for search results (30-second cache by default)
 - CLI interface powered by `clap`
 - Pretty logging and error handling
+- Optional cache invalidation when re-indexing via `--flush-cache`
 
 ## Installation
 
@@ -76,4 +77,5 @@ Top 3 results for query 'rust programming':
   [Cache Hit]
   ```
 
+- Using `--flush-cache` is optional but ensures old cached results are removed before re-indexing.
 - The index is stored in ./index by default. You can delete or move it to re-index documents.
